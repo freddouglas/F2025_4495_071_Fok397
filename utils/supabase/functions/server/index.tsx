@@ -49,9 +49,16 @@ const getUserFromToken = async (authHeader: string | null) => {
   const token = authHeader.split(" ")[1];
   if (!token) return null;
 
-  const supabase = getSupabaseClient();
+  // Use the token to create a client with the user's context
+  const supabase = getSupabaseClient(token);
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return null;
+  
+  if (error) {
+    console.log(`Auth error: ${error.message}`);
+    return null;
+  }
+  
+  if (!data.user) return null;
   return data.user;
 };
 
