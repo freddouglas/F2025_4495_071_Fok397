@@ -12,22 +12,40 @@ import {
 import { User } from './LoginPage';
 import { adminAPI } from '../utils/api';
 import { showToast } from './Toast';
-import { colors, spacing, borderRadius } from '../utils/theme';
+import { AdminAnalytics } from './AdminAnalytics';
+import { AdminAppFeedback } from './AdminAppFeedback';
+import { AdminDonorReviews } from './AdminDonorReviews';
+import { useTheme } from '../contexts/ThemeContext';
+import { spacing, borderRadius, fontSize, fontWeight } from '../utils/theme';
 
 interface AdminPanelProps {
   currentUser: User;
 }
 
+type TabType = 'users' | 'analytics' | 'feedback' | 'donor-reviews';
+
 export function AdminPanel({ currentUser }: AdminPanelProps) {
+  const { colors, isDark } = useTheme();
+  const [activeTab, setActiveTab] = useState<TabType>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     loadUsers();
-  }, []);
+
+    // Auto-refresh every 30 seconds when on analytics tab
+    const interval = setInterval(() => {
+      if (activeTab === 'analytics') {
+        refreshAnalytics();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   useEffect(() => {
     // Filter users based on search query
@@ -44,6 +62,12 @@ export function AdminPanel({ currentUser }: AdminPanelProps) {
       setFilteredUsers(filtered);
     }
   }, [searchQuery, users]);
+
+  const refreshAnalytics = async () => {
+    setIsRefreshing(true);
+    // The AdminAnalytics component will handle its own refresh
+    setTimeout(() => setIsRefreshing(false), 1000);
+  };
 
   const loadUsers = async () => {
     try {
@@ -62,11 +86,11 @@ export function AdminPanel({ currentUser }: AdminPanelProps) {
   const handleDeleteUser = (userId: string, userName: string) => {
     Alert.alert(
       `Delete User: ${userName}?`,
-      'This action cannot be undone. This will permanently delete:\n\n' +
-        '• User account and profile\n' +
-        '• All items posted by this user\n' +
-        '• All reviews written by this user\n' +
-        '• All messages sent/received by this user\n\n' +
+      'This action cannot be undone. This will permanently delete:\\n\\n' +
+        '• User account and profile\\n' +
+        '• All items posted by this user\\n' +
+        '• All reviews written by this user\\n' +
+        '• All messages sent/received by this user\\n\\n' +
         'Are you absolutely sure?',
       [
         {
@@ -82,7 +106,7 @@ export function AdminPanel({ currentUser }: AdminPanelProps) {
               const result = await adminAPI.deleteUser(userId);
 
               showToast(
-                `Deleted: ${userName}\n${result.itemsDeleted} items, ${result.reviewsDeleted} reviews, ${result.messagesDeleted} messages removed`,
+                `Deleted: ${userName}\\n${result.itemsDeleted} items, ${result.reviewsDeleted} reviews, ${result.messagesDeleted} messages removed`,
                 'success'
               );
 
@@ -103,6 +127,218 @@ export function AdminPanel({ currentUser }: AdminPanelProps) {
     );
   };
 
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      padding: spacing.lg,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerTitle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.sm,
+    },
+    headerIcon: {
+      fontSize: fontSize['2xl'],
+      marginRight: spacing.sm,
+    },
+    title: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.medium as any,
+      color: colors.foreground,
+    },
+    description: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+    },
+    errorCard: {
+      margin: spacing.lg,
+      padding: spacing.xl,
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    errorTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.medium as any,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    errorText: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    tabsContainer: {
+      flexDirection: 'row',
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      borderBottomWidth: 2,
+      borderBottomColor: 'transparent',
+    },
+    activeTab: {
+      borderBottomColor: colors.primary,
+    },
+    tabIcon: {
+      fontSize: fontSize.sm,
+      marginRight: spacing.xs,
+    },
+    tabText: {
+      fontSize: fontSize.xs,
+      color: colors.textSecondary,
+      fontWeight: fontWeight.medium as any,
+    },
+    activeTabText: {
+      color: colors.foreground,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    statsCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      margin: spacing.lg,
+    },
+    statsIcon: {
+      fontSize: fontSize.lg,
+      marginRight: spacing.sm,
+    },
+    statsText: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+    },
+    searchContainer: {
+      position: 'relative',
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.lg,
+    },
+    searchInput: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      paddingRight: spacing.xl * 2,
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    clearButton: {
+      position: 'absolute',
+      right: spacing.md,
+      top: '50%',
+      transform: [{ translateY: -12 }],
+      padding: spacing.xs,
+    },
+    clearButtonText: {
+      fontSize: fontSize.lg,
+      color: colors.textSecondary,
+    },
+    loadingContainer: {
+      padding: spacing.xl * 2,
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: spacing.md,
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+    },
+    emptyContainer: {
+      padding: spacing.xl * 2,
+      alignItems: 'center',
+    },
+    emptyText: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    userList: {
+      padding: spacing.lg,
+    },
+    userCard: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+    },
+    userInfo: {
+      marginBottom: spacing.md,
+    },
+    userHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    userName: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium as any,
+      color: colors.foreground,
+      marginRight: spacing.sm,
+    },
+    adminBadge: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: borderRadius.md,
+    },
+    adminBadgeText: {
+      fontSize: fontSize.xs,
+      color: colors.primaryForeground,
+      fontWeight: fontWeight.bold as any,
+    },
+    userEmail: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+      marginBottom: spacing.xs,
+    },
+    userLocation: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+      marginBottom: spacing.xs,
+    },
+    userDate: {
+      fontSize: fontSize.xs,
+      color: colors.textSecondary,
+    },
+    deleteButton: {
+      backgroundColor: colors.destructive,
+      borderRadius: borderRadius.lg,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      alignItems: 'center',
+    },
+    deleteButtonDisabled: {
+      opacity: 0.5,
+    },
+    deleteButtonText: {
+      fontSize: fontSize.sm,
+      color: colors.destructiveForeground,
+      fontWeight: fontWeight.medium as any,
+    },
+  });
+
   if (!currentUser.isAdmin) {
     return (
       <View style={styles.container}>
@@ -117,365 +353,155 @@ export function AdminPanel({ currentUser }: AdminPanelProps) {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTitle}>
           <Text style={styles.headerIcon}>🛡️</Text>
           <Text style={styles.title}>Admin Panel</Text>
         </View>
-        <Text style={styles.subtitle}>User Management</Text>
         <Text style={styles.description}>
-          Manage all users in the Food Share system. You can view user details and delete
-          accounts.
+          Manage users, view analytics, and monitor Food Share activity
         </Text>
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsIcon}>👥</Text>
-          <Text style={styles.statsText}>{users.length} total users</Text>
-        </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name, email, or location..."
-          placeholderTextColor={colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity
-            onPress={() => setSearchQuery('')}
-            style={styles.clearButton}
-          >
-            <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {searchQuery.length > 0 && (
-        <Text style={styles.searchResults}>
-          Found {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}
-        </Text>
-      )}
-
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading users...</Text>
-        </View>
-      ) : filteredUsers.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
-            {searchQuery ? 'No users found matching your search' : 'No users found'}
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'users' && styles.activeTab]}
+          onPress={() => setActiveTab('users')}
+        >
+          <Text style={styles.tabIcon}>👥</Text>
+          <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
+            User Management
           </Text>
-        </View>
-      ) : (
-        <View style={styles.usersList}>
-          {filteredUsers.map((user) => {
-            const isCurrentUser = user.id === currentUser.id;
-            const isDeleting = deletingUserId === user.id;
+        </TouchableOpacity>
 
-            return (
-              <View
-                key={user.id}
-                style={[
-                  styles.userCard,
-                  isCurrentUser && styles.currentUserCard,
-                ]}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'analytics' && styles.activeTab]}
+          onPress={() => setActiveTab('analytics')}
+        >
+          <Text style={styles.tabIcon}>📊</Text>
+          <Text style={[styles.tabText, activeTab === 'analytics' && styles.activeTabText]}>
+            Review Analytics
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'feedback' && styles.activeTab]}
+          onPress={() => setActiveTab('feedback')}
+        >
+          <Text style={styles.tabIcon}>💬</Text>
+          <Text style={[styles.tabText, activeTab === 'feedback' && styles.activeTabText]}>
+            App Feedback
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'donor-reviews' && styles.activeTab]}
+          onPress={() => setActiveTab('donor-reviews')}
+        >
+          <Text style={styles.tabIcon}>🌟</Text>
+          <Text style={[styles.tabText, activeTab === 'donor-reviews' && styles.activeTabText]}>
+            Donor Reviews
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tab Content */}
+      {activeTab === 'users' && (
+        <ScrollView style={styles.scrollView}>
+          {/* Stats */}
+          <View style={styles.statsCard}>
+            <Text style={styles.statsIcon}>👥</Text>
+            <Text style={styles.statsText}>{users.length} total users</Text>
+          </View>
+
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by name, email, or location..."
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearButton}
               >
-                <View style={styles.userHeader}>
-                  <View style={styles.userNameContainer}>
-                    <Text style={styles.userName}>{user.name}</Text>
-                    {user.isAdmin && (
-                      <View style={styles.adminBadge}>
-                        <Text style={styles.adminBadgeText}>🛡️ Admin</Text>
-                      </View>
-                    )}
-                    {isCurrentUser && (
-                      <Text style={styles.youBadge}>(You)</Text>
-                    )}
-                  </View>
-                </View>
+                <Text style={styles.clearButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-                <View style={styles.userDetails}>
-                  <Text style={styles.userDetailText}>📧 {user.email}</Text>
-                  <Text style={styles.userDetailText}>📍 {user.location}</Text>
-                  <Text style={styles.userDetailText}>
-                    📅 Joined: {new Date(user.joinDate).toLocaleDateString()}
-                  </Text>
-                </View>
-
-                <View style={styles.userStats}>
-                  <Text style={styles.userStatText}>
-                    🎁 {user.itemsShared} shared
-                  </Text>
-                  <Text style={styles.userStatText}>
-                    📦 {user.itemsClaimed} claimed
-                  </Text>
-                  <Text style={styles.userStatText}>
-                    ⭐ {user.rating.toFixed(1)} ({user.totalReviews} reviews)
-                  </Text>
-                </View>
-
-                {user.bio && (
-                  <Text style={styles.userBio}>&quot;{user.bio}&quot;</Text>
-                )}
-
-                {isCurrentUser ? (
-                  <View style={styles.cannotDeleteButton}>
-                    <Text style={styles.cannotDeleteButtonText}>
-                      Cannot Delete Self
+          {/* User List */}
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading users...</Text>
+            </View>
+          ) : filteredUsers.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'No users found matching your search' : 'No users yet'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.userList}>
+              {filteredUsers.map((user) => (
+                <View key={user.id} style={styles.userCard}>
+                  <View style={styles.userInfo}>
+                    <View style={styles.userHeader}>
+                      <Text style={styles.userName}>{user.name}</Text>
+                      {user.isAdmin && (
+                        <View style={styles.adminBadge}>
+                          <Text style={styles.adminBadgeText}>Admin</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.userEmail}>{user.email}</Text>
+                    <Text style={styles.userLocation}>📍 {user.location}</Text>
+                    <Text style={styles.userDate}>
+                      Joined {new Date(user.joinDate).toLocaleDateString()}
                     </Text>
                   </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[
-                      styles.deleteButton,
-                      isDeleting && styles.deleteButtonDisabled,
-                    ]}
-                    onPress={() => handleDeleteUser(user.id, user.name)}
-                    disabled={isDeleting}
-                  >
-                    <Text style={styles.deleteButtonText}>
-                      {isDeleting ? '🗑️ Deleting...' : '🗑️ Delete User'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
-        </View>
+
+                  {!user.isAdmin && (
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteButton,
+                        deletingUserId === user.id && styles.deleteButtonDisabled,
+                      ]}
+                      onPress={() => handleDeleteUser(user.id, user.name)}
+                      disabled={deletingUserId === user.id}
+                    >
+                      {deletingUserId === user.id ? (
+                        <ActivityIndicator size="small" color={colors.destructiveForeground} />
+                      ) : (
+                        <Text style={styles.deleteButtonText}>🗑️ Delete</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
       )}
-    </ScrollView>
+
+      {activeTab === 'analytics' && (
+        <AdminAnalytics isRefreshing={isRefreshing} />
+      )}
+
+      {activeTab === 'feedback' && (
+        <AdminAppFeedback isRefreshing={isRefreshing} />
+      )}
+
+      {activeTab === 'donor-reviews' && (
+        <AdminDonorReviews isRefreshing={isRefreshing} />
+      )}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  headerTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  headerIcon: {
-    fontSize: 24,
-    marginRight: spacing.xs,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  statsIcon: {
-    fontSize: 16,
-    marginRight: spacing.xs,
-  },
-  statsText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  searchContainer: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    position: 'relative',
-  },
-  searchInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 16,
-    color: colors.text,
-  },
-  clearButton: {
-    position: 'absolute',
-    right: spacing.sm,
-    top: '50%',
-    transform: [{ translateY: -12 }],
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  clearButtonText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  searchResults: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  loadingContainer: {
-    paddingVertical: spacing.xl * 2,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: spacing.md,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  emptyContainer: {
-    paddingVertical: spacing.xl * 2,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  usersList: {
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  userCard: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  currentUserCard: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  userHeader: {
-    marginBottom: spacing.sm,
-  },
-  userNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginRight: spacing.xs,
-  },
-  adminBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-    marginRight: spacing.xs,
-  },
-  adminBadgeText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  youBadge: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  userDetails: {
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
-  },
-  userDetailText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  userStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  userStatText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  userBio: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    marginBottom: spacing.sm,
-  },
-  deleteButton: {
-    backgroundColor: colors.error,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  deleteButtonDisabled: {
-    opacity: 0.5,
-  },
-  deleteButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  cannotDeleteButton: {
-    backgroundColor: colors.border,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  cannotDeleteButtonText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  errorCard: {
-    margin: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    alignItems: 'center',
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  errorText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-});

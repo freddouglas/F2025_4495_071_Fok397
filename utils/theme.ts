@@ -1,9 +1,9 @@
 /**
  * Design System / Theme
- * Matches the web app's Tailwind configuration
+ * Supports both light and dark modes
  */
 
-export const colors = {
+export const lightColors = {
   background: '#ffffff',
   foreground: '#1a1a1a',
   card: '#ffffff',
@@ -40,6 +40,43 @@ export const colors = {
   error: '#dc2626',
 };
 
+export const darkColors = {
+  background: '#222831',
+  foreground: '#e5e5e5',
+  card: '#262626',
+  cardForeground: '#e5e5e5',
+  primary: '#f5f5f5',
+  primaryForeground: '#1a1a1a',
+  secondary: '#333333',
+  secondaryForeground: '#e5e5e5',
+  muted: '#2a2a2a',
+  mutedForeground: '#a3a3a3',
+  accent: '#363636',
+  accentForeground: '#e5e5e5',
+  destructive: '#ef4444',
+  destructiveForeground: '#ffffff',
+  border: '#3a3a3a',
+  input: 'transparent',
+  inputBackground: '#262626',
+  switchBackground: '#4a4a4a',
+  ring: '#525252',
+  
+  // Status colors
+  green: '#22c55e',
+  yellow: '#eab308',
+  red: '#ef4444',
+  orange: '#f97316',
+  
+  // Opacity variants
+  mutedBg: 'rgba(42, 42, 42, 0.5)',
+  
+  // Aliases for compatibility
+  surface: '#262626',
+  text: '#e5e5e5',
+  textSecondary: '#a3a3a3',
+  error: '#ef4444',
+};
+
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -54,7 +91,8 @@ export const spacing = {
 export const borderRadius = {
   sm: 6,
   md: 8,
-  lg: 10,
+  lg: 12,
+  xl: 16,
   full: 9999,
 };
 
@@ -99,3 +137,6 @@ export const shadows = {
     elevation: 5,
   },
 };
+
+// Default to light colors for backwards compatibility
+export const colors = lightColors;

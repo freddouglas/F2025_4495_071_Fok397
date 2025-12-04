@@ -529,12 +529,21 @@ app.get("/make-server-089874b4/reviews/:userId", async (c) => {
     // kv.getByPrefix already returns just the values, no need for .map(review => review.value)
     const reviewsList = reviews.filter((review: any) => review != null && typeof review === 'object');
 
+    // Transform type field: if the review is for this user (recipientId matches), it's "received"
+    // In our UI, type "received" means "as donor" and type "given" means "as recipient"
+    const transformedReviews = reviewsList.map((review: any) => ({
+      ...review,
+      // Keep the original type but add contextual meaning
+      // type: "donor" means reviewing a donor, so for the donor's profile it's "received"
+      type: review.type === "donor" ? "received" : "given",
+    }));
+
     // Sort by date, newest first
-    reviewsList.sort((a: any, b: any) =>
+    transformedReviews.sort((a: any, b: any) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
-    return c.json({ reviews: reviewsList });
+    return c.json({ reviews: transformedReviews });
   } catch (error) {
     console.log(`Get reviews error: ${error}`);
     return c.json({ error: "Failed to fetch reviews" }, 500);
@@ -553,17 +562,21 @@ app.post("/make-server-089874b4/reviews", async (c) => {
     const reviewData = await c.req.json();
     const reviewId = `${Date.now()}_${user.id}`;
     
+    // Get reviewer profile for name
+    const reviewerProfile: any = await kv.get(`user:${user.id}`);
+    
     const review = {
       ...reviewData,
       id: reviewId,
       reviewerId: user.id,
+      reviewerName: reviewerProfile?.name || "Unknown User",
       date: new Date().toISOString(),
     };
 
     // Store review with recipient's userId as prefix for easy querying
     await kv.set(`review:${reviewData.recipientId}:${reviewId}`, review);
 
-    // Update recipient's rating
+    // Update recipient's rating and detailed rating parameters
     const recipientProfile: any = await kv.get(`user:${reviewData.recipientId}`);
     if (recipientProfile) {
       const totalReviews = (recipientProfile.totalReviews || 0) + 1;
@@ -572,13 +585,454 @@ app.post("/make-server-089874b4/reviews", async (c) => {
       
       recipientProfile.rating = newRating;
       recipientProfile.totalReviews = totalReviews;
+      
+      // Update detailed rating parameters if provided
+      if (reviewData.ratings) {
+        if (!recipientProfile.detailedRatings) {
+          recipientProfile.detailedRatings = {};
+        }
+        
+        // Calculate average for each parameter
+        Object.keys(reviewData.ratings).forEach(paramId => {
+          const currentParamRating = recipientProfile.detailedRatings[paramId] || { total: 0, count: 0 };
+          const newParamTotal = currentParamRating.total + reviewData.ratings[paramId];
+          const newParamCount = currentParamRating.count + 1;
+          
+          recipientProfile.detailedRatings[paramId] = {
+            total: newParamTotal,
+            count: newParamCount,
+            average: newParamTotal / newParamCount,
+          };
+        });
+      }
+      
       await kv.set(`user:${reviewData.recipientId}`, recipientProfile);
     }
+
+    // Trigger analytics cache invalidation by updating a timestamp
+    await kv.set("analytics:last-update", new Date().toISOString());
 
     return c.json({ review });
   } catch (error) {
     console.log(`Create review error: ${error}`);
     return c.json({ error: "Failed to create review" }, 500);
+  }
+});
+
+// Get claimed items for a user
+app.get("/make-server-089874b4/items/claimed/:userId", async (c) => {
+  try {
+    const userId = c.req.param("userId");
+    console.log(`📦 GET /items/claimed/${userId} - Fetching claimed items...`);
+    
+    const items = await kv.getByPrefix("item:");
+    const claimedItems = items.filter((item: any) => 
+      item && item.claimedBy === userId && item.status === "claimed"
+    );
+    
+    console.log(`📦 Found ${claimedItems.length} claimed items for user ${userId}`);
+    
+    // For each claimed item, check if user has already reviewed the donor
+    const itemsWithReviewStatus = await Promise.all(
+      claimedItems.map(async (item: any) => {
+        // Check if review exists: review key format is review:donorId:reviewId
+        // We need to check if there's a review from this claimer for this donor on this item
+        const allReviews = await kv.getByPrefix(`review:${item.userId}:`);
+        const hasReviewed = allReviews.some((review: any) => 
+          review && review.reviewerId === userId && review.itemId === item.id
+        );
+        
+        return {
+          ...item,
+          hasReviewed,
+        };
+      })
+    );
+    
+    return c.json({ items: itemsWithReviewStatus });
+  } catch (error) {
+    console.log(`Get claimed items error: ${error}`);
+    return c.json({ error: "Failed to fetch claimed items" }, 500);
+  }
+});
+
+// Check if user has reviewed a specific item donor
+app.get("/make-server-089874b4/reviews/check/:itemId/:donorId", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const user = await getUserFromToken(authHeader);
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const itemId = c.req.param("itemId");
+    const donorId = c.req.param("donorId");
+    
+    const allReviews = await kv.getByPrefix(`review:${donorId}:`);
+    const hasReviewed = allReviews.some((review: any) => 
+      review && review.reviewerId === user.id && review.itemId === itemId
+    );
+    
+    return c.json({ hasReviewed });
+  } catch (error) {
+    console.log(`Check review error: ${error}`);
+    return c.json({ error: "Failed to check review status" }, 500);
+  }
+});
+
+// ==================== ADMIN ANALYTICS ROUTES ====================
+
+app.get("/make-server-089874b4/admin/analytics/reviews", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const user = await getUserFromToken(authHeader);
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Check if user is admin
+    const userProfile: any = await kv.get(`user:${user.id}`);
+    if (!userProfile?.isAdmin) {
+      return c.json({ error: "Forbidden - Admin only" }, 403);
+    }
+
+    // Get all reviews
+    const allKeys = await kv.getByPrefix("review:");
+    const allReviews = allKeys.filter((review: any) => review != null && typeof review === 'object');
+
+    // Calculate statistics
+    const totalReviews = allReviews.length;
+    const avgRating = totalReviews > 0 
+      ? allReviews.reduce((sum: number, r: any) => sum + (r.rating || 0), 0) / totalReviews 
+      : 0;
+
+    // Rating distribution (count of each rating 1-5)
+    const ratingDistribution = {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+    };
+    allReviews.forEach((review: any) => {
+      const rating = Math.floor(review.rating || 0);
+      if (rating >= 1 && rating <= 5) {
+        ratingDistribution[rating.toString() as keyof typeof ratingDistribution]++;
+      }
+    });
+
+    // Reviews over time (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const reviewsByDay: { [key: string]: number } = {};
+    allReviews.forEach((review: any) => {
+      const date = new Date(review.date);
+      if (date >= thirtyDaysAgo) {
+        const dateKey = date.toISOString().split('T')[0];
+        reviewsByDay[dateKey] = (reviewsByDay[dateKey] || 0) + 1;
+      }
+    });
+
+    // Get all users to find top rated
+    const allUsers = await kv.getByPrefix("user:");
+    const usersWithReviews = allUsers
+      .filter((u: any) => u && u.totalReviews > 0)
+      .map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        rating: u.rating,
+        totalReviews: u.totalReviews,
+      }))
+      .sort((a: any, b: any) => b.rating - a.rating)
+      .slice(0, 10);
+
+    // Recent reviews
+    const recentReviews = allReviews
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10)
+      .map((r: any) => ({
+        id: r.id,
+        reviewerName: r.reviewerName,
+        recipientId: r.recipientId,
+        rating: r.rating,
+        comment: r.comment,
+        itemTitle: r.itemTitle,
+        date: r.date,
+        type: r.type,
+      }));
+
+    return c.json({
+      totalReviews,
+      avgRating,
+      ratingDistribution,
+      reviewsByDay,
+      topRatedUsers: usersWithReviews,
+      recentReviews,
+    });
+  } catch (error) {
+    console.log(`Admin analytics error: ${error}`);
+    return c.json({ error: "Failed to fetch analytics" }, 500);
+  }
+});
+
+// Get all donor reviews with statistics (Admin only)
+app.get("/make-server-089874b4/admin/donor-reviews", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const user = await getUserFromToken(authHeader);
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Check if user is admin
+    const userProfile: any = await kv.get(`user:${user.id}`);
+    if (!userProfile?.isAdmin) {
+      return c.json({ error: "Forbidden - Admin only" }, 403);
+    }
+
+    // Get all reviews
+    const allKeys = await kv.getByPrefix("review:");
+    const allReviews = allKeys.filter((review: any) => review != null && typeof review === 'object');
+
+    // Filter to get only donor reviews (type === "donor")
+    const donorReviews = allReviews.filter((review: any) => review.type === "donor");
+
+    // Get all users to build donor statistics
+    const allUsers = await kv.getByPrefix("user:");
+    const usersMap = new Map();
+    allUsers.forEach((user: any) => {
+      if (user && user.id) {
+        usersMap.set(user.id, user);
+      }
+    });
+
+    // Build donor statistics
+    const donorStatsMap = new Map();
+
+    donorReviews.forEach((review: any) => {
+      const donorId = review.recipientId;
+      const donor = usersMap.get(donorId);
+      
+      if (!donor) return;
+
+      if (!donorStatsMap.has(donorId)) {
+        donorStatsMap.set(donorId, {
+          userId: donorId,
+          userName: donor.name,
+          userEmail: donor.email,
+          totalReviews: 0,
+          averageRating: 0,
+          itemsShared: donor.itemsShared || 0,
+          recentTrend: "stable" as "up" | "down" | "stable",
+          detailedRatings: {},
+          allRatings: [],
+        });
+      }
+
+      const stats = donorStatsMap.get(donorId);
+      stats.totalReviews++;
+      stats.allRatings.push({
+        rating: review.rating,
+        date: review.date,
+      });
+
+      // Accumulate detailed ratings
+      if (review.ratings) {
+        Object.keys(review.ratings).forEach(key => {
+          if (!stats.detailedRatings[key]) {
+            stats.detailedRatings[key] = {
+              total: 0,
+              count: 0,
+              average: 0,
+            };
+          }
+          stats.detailedRatings[key].total += review.ratings[key];
+          stats.detailedRatings[key].count++;
+        });
+      }
+    });
+
+    // Calculate averages and trends
+    const donorStats: any[] = [];
+    donorStatsMap.forEach((stats) => {
+      // Calculate average rating
+      stats.averageRating = stats.allRatings.reduce((sum: number, r: any) => sum + r.rating, 0) / stats.totalReviews;
+
+      // Calculate detailed rating averages
+      Object.keys(stats.detailedRatings).forEach(key => {
+        stats.detailedRatings[key].average = 
+          stats.detailedRatings[key].total / stats.detailedRatings[key].count;
+      });
+
+      // Calculate trend based on last 5 reviews vs previous reviews
+      if (stats.allRatings.length >= 5) {
+        // Sort by date, newest first
+        stats.allRatings.sort((a: any, b: any) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        
+        const recent5 = stats.allRatings.slice(0, 5);
+        const previous = stats.allRatings.slice(5);
+        
+        if (previous.length > 0) {
+          const recentAvg = recent5.reduce((sum: number, r: any) => sum + r.rating, 0) / recent5.length;
+          const previousAvg = previous.reduce((sum: number, r: any) => sum + r.rating, 0) / previous.length;
+          
+          const diff = recentAvg - previousAvg;
+          if (diff > 0.2) stats.recentTrend = "up";
+          else if (diff < -0.2) stats.recentTrend = "down";
+          else stats.recentTrend = "stable";
+        }
+      }
+
+      // Clean up before adding to result
+      delete stats.allRatings;
+      donorStats.push(stats);
+    });
+
+    // Format reviews for response
+    const formattedReviews = donorReviews.map((review: any) => {
+      const donor = usersMap.get(review.recipientId);
+      return {
+        id: review.id,
+        donorId: review.recipientId,
+        donorName: donor?.name || "Unknown Donor",
+        reviewerName: review.reviewerName,
+        rating: review.rating,
+        comment: review.comment,
+        date: review.date,
+        itemTitle: review.itemTitle || "Unknown Item",
+        ratings: review.ratings || null,
+      };
+    });
+
+    return c.json({
+      donorStats,
+      reviews: formattedReviews,
+    });
+  } catch (error) {
+    console.log(`Admin donor reviews error: ${error}`);
+    return c.json({ error: "Failed to fetch donor reviews" }, 500);
+  }
+});
+
+// ==================== APP FEEDBACK ROUTES ====================
+
+app.post("/make-server-089874b4/app-feedback", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const user = await getUserFromToken(authHeader);
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const feedbackData = await c.req.json();
+    
+    // Get user profile for name
+    const userProfile: any = await kv.get(`user:${user.id}`);
+    
+    const feedback = {
+      id: `${Date.now()}_${user.id}`,
+      userId: user.id,
+      userName: userProfile?.name || "Unknown User",
+      rating: feedbackData.rating,
+      comment: feedbackData.comment,
+      category: feedbackData.category || "general",
+      date: new Date().toISOString(),
+    };
+
+    // Store app feedback
+    await kv.set(`app-feedback:${feedback.id}`, feedback);
+
+    return c.json({ feedback });
+  } catch (error) {
+    console.log(`Create app feedback error: ${error}`);
+    return c.json({ error: "Failed to submit feedback" }, 500);
+  }
+});
+
+app.get("/make-server-089874b4/app-feedback/:userId", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const user = await getUserFromToken(authHeader);
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const userId = c.req.param("userId");
+    
+    // Get all app feedback
+    const allFeedback = await kv.getByPrefix("app-feedback:");
+    
+    // Filter feedback by userId
+    const userFeedback = allFeedback
+      .filter((fb: any) => fb && fb.userId === userId)
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return c.json({ feedback: userFeedback });
+  } catch (error) {
+    console.log(`Get app feedback error: ${error}`);
+    return c.json({ error: "Failed to fetch feedback" }, 500);
+  }
+});
+
+app.get("/make-server-089874b4/admin/app-feedback", async (c) => {
+  try {
+    const authHeader = c.req.header("Authorization");
+    const user = await getUserFromToken(authHeader);
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Check if user is admin
+    const userProfile: any = await kv.get(`user:${user.id}`);
+    if (!userProfile?.isAdmin) {
+      return c.json({ error: "Forbidden - Admin only" }, 403);
+    }
+
+    // Get all app feedback
+    const allFeedback = await kv.getByPrefix("app-feedback:");
+    const feedbackList = allFeedback
+      .filter((fb: any) => fb != null && typeof fb === 'object')
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Calculate statistics
+    const totalFeedback = feedbackList.length;
+    const avgRating = totalFeedback > 0
+      ? feedbackList.reduce((sum: number, fb: any) => sum + (fb.rating || 0), 0) / totalFeedback
+      : 0;
+
+    // Rating distribution
+    const ratingDistribution = {
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "5": 0,
+    };
+    feedbackList.forEach((fb: any) => {
+      const rating = Math.floor(fb.rating || 0);
+      if (rating >= 1 && rating <= 5) {
+        ratingDistribution[rating.toString() as keyof typeof ratingDistribution]++;
+      }
+    });
+
+    return c.json({
+      totalFeedback,
+      avgRating,
+      ratingDistribution,
+      feedback: feedbackList,
+    });
+  } catch (error) {
+    console.log(`Admin app feedback error: ${error}`);
+    return c.json({ error: "Failed to fetch app feedback" }, 500);
   }
 });
 
@@ -668,8 +1122,18 @@ app.post("/make-server-089874b4/messages", async (c) => {
       createdAt: new Date().toISOString(),
     };
 
+    console.log(`📨 Sending message:`, {
+      messageId,
+      senderId: user.id,
+      recipientId: messageData.recipientId,
+      itemId: messageData.itemId,
+      messagePreview: messageData.message?.substring(0, 30),
+    });
+
     // Store message with both sender and recipient prefixes for querying
     await kv.set(`message:${messageData.itemId}:${messageId}`, message);
+    
+    console.log(`✅ Message stored at: message:${messageData.itemId}:${messageId}`);
 
     return c.json({ message });
   } catch (error) {
@@ -688,12 +1152,24 @@ app.get("/make-server-089874b4/messages/:itemId", async (c) => {
     }
 
     const itemId = c.req.param("itemId");
+    console.log(`📬 Fetching messages for item ${itemId}, requested by user ${user.id}`);
+    
     const messages = await kv.getByPrefix(`message:${itemId}:`);
+    console.log(`📬 Found ${messages.length} raw messages`);
     
     // Filter out null/undefined messages and ensure valid structure
     const messagesList = messages
       .filter((msg: any) => msg != null && typeof msg === 'object' && 'senderId' in msg)
       .map((msg: any) => msg);
+
+    console.log(`📬 After filtering: ${messagesList.length} valid messages`);
+    if (messagesList.length > 0) {
+      console.log(`📬 Sample message:`, {
+        senderId: messagesList[0].senderId,
+        recipientId: messagesList[0].recipientId,
+        message: messagesList[0].message?.substring(0, 30),
+      });
+    }
 
     // Sort by date, oldest first
     messagesList.sort((a: any, b: any) =>
@@ -730,7 +1206,7 @@ app.get("/make-server-089874b4/messages/:itemId", async (c) => {
       })
     );
 
-    console.log(`Fetched ${enrichedMessages.length} messages for item ${itemId}`);
+    console.log(`✅ Returning ${enrichedMessages.length} enriched messages for item ${itemId}`);
 
     return c.json({ messages: enrichedMessages });
   } catch (error) {
@@ -826,9 +1302,26 @@ app.get("/make-server-089874b4/conversations", async (c) => {
       );
 
       const lastMessage = conv.messages[conv.messages.length - 1];
-      const unreadCount = conv.messages.filter(
-        (m: any) => m.recipientId === user.id && !m.read
-      ).length;
+      
+      // Calculate unread count by checking view status
+      let unreadCount = 0;
+      for (const m of conv.messages) {
+        // Only count messages sent TO current user (where they are recipient)
+        if (m.recipientId === user.id && m.senderId !== user.id) {
+          // Check if user has viewed this conversation after the message was sent
+          const viewKey = `view:${user.id}:${m.itemId}:${m.senderId}`;
+          const lastViewed: any = await kv.get(viewKey);
+          
+          let isRead = false;
+          if (lastViewed && lastViewed.timestamp) {
+            isRead = new Date(m.createdAt) <= new Date(lastViewed.timestamp);
+          }
+          
+          if (!isRead) {
+            unreadCount++;
+          }
+        }
+      }
 
       conversations.push({
         itemId: conv.itemId,

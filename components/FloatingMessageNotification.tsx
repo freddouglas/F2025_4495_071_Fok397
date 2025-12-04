@@ -17,13 +17,12 @@ interface ItemConversation {
   itemId: string;
   itemTitle: string;
   itemStatus: string;
-  conversations: {
-    userId: string;
-    userName: string;
-    lastMessage: string;
-    lastMessageTime: string;
-    unreadCount: number;
-  }[];
+  isMyItem: boolean; // true = I'm the donor, false = I'm the claimer
+  otherUserId: string; // The other person in this conversation
+  otherUserName: string;
+  lastMessage: string;
+  lastMessageTime: string;
+  unreadCount: number;
 }
 
 interface FloatingMessageNotificationProps {
@@ -50,75 +49,129 @@ export function FloatingMessageNotification({ currentUserId }: FloatingMessageNo
 
   const fetchDonorMessages = async () => {
     try {
-      // Get all items owned by current user
       const { items } = await itemsAPI.getAll();
-      const myItems = items.filter((item: any) => item.userId === currentUserId);
-
-      if (myItems.length === 0) {
-        setItemConversations([]);
-        setTotalUnread(0);
-        return;
-      }
-
-      // Fetch messages for each item
-      const itemConvs: ItemConversation[] = [];
+      
+      console.log(`🔍 FloatingMessageNotification - Fetching all conversations for user: ${currentUserId}`);
+      
+      const allConversations: ItemConversation[] = [];
       let unreadTotal = 0;
+      
+      // Build a user name lookup from all users we've seen in messages
+      const userNameLookup = new Map<string, string>();
 
-      for (const item of myItems) {
+      // Process all items to find conversations
+      for (const item of items) {
         try {
           const { messages } = await messagesAPI.getByItem(item.id);
           
           if (!messages || messages.length === 0) continue;
 
-          // Group messages by sender (other user)
+          const isMyItem = item.userId === currentUserId;
+          
+          // First pass: build user name lookup from all messages
+          messages.forEach((msg: any) => {
+            if (msg.senderId && msg.senderName) {
+              userNameLookup.set(msg.senderId, msg.senderName);
+            }
+          });
+          
+          // Group messages by the "other person" in the conversation
           const conversationMap = new Map<string, {
-            userId: string;
-            userName: string;
             lastMessage: string;
             lastMessageTime: string;
             unreadCount: number;
+            otherUserName: string;
           }>();
 
           messages.forEach((msg: any) => {
-            // Only include messages FROM others (not messages I sent)
-            if (msg.senderId !== currentUserId && msg.senderId && msg.senderName) {
-              const existing = conversationMap.get(msg.senderId);
+            // Determine who the "other person" is
+            let otherUserId: string | null = null;
+            let otherUserName: string | null = null;
+            
+            if (isMyItem) {
+              // I'm the donor - the "other" is anyone who messaged me
+              if (msg.senderId !== currentUserId) {
+                otherUserId = msg.senderId;
+                otherUserName = msg.senderName;
+              }
+            } else {
+              // I'm the claimer - check if I'm involved in this conversation
+              const isMyMessage = msg.senderId === currentUserId || msg.recipientId === currentUserId;
               
-              if (!existing || new Date(msg.timestamp) > new Date(existing.lastMessageTime)) {
-                conversationMap.set(msg.senderId, {
-                  userId: msg.senderId,
-                  userName: msg.senderName || 'Unknown User',
-                  lastMessage: msg.message || '',
-                  lastMessageTime: msg.timestamp,
-                  unreadCount: (existing?.unreadCount || 0) + (!msg.read ? 1 : 0),
-                });
-              } else if (!msg.read) {
+              if (isMyMessage) {
+                // The "other" is the donor (item owner)
+                otherUserId = item.userId;
+                // Try to get donor's name from lookup
+                otherUserName = userNameLookup.get(item.userId) || item.userName || 'Donor';
+              }
+            }
+
+            if (!otherUserId) return;
+
+            const existing = conversationMap.get(otherUserId);
+            
+            // Count unread messages (only messages FROM the other person that are unread)
+            const isUnread = msg.senderId === otherUserId && !msg.read;
+            
+            if (!existing) {
+              conversationMap.set(otherUserId, {
+                lastMessage: msg.message || '',
+                lastMessageTime: msg.timestamp || msg.createdAt,
+                unreadCount: isUnread ? 1 : 0,
+                otherUserName: otherUserName || 'Unknown User',
+              });
+            } else {
+              // Update if this message is newer
+              const msgTime = new Date(msg.timestamp || msg.createdAt);
+              const existingTime = new Date(existing.lastMessageTime);
+              
+              if (msgTime > existingTime) {
+                existing.lastMessage = msg.message || '';
+                existing.lastMessageTime = msg.timestamp || msg.createdAt;
+              }
+              
+              if (isUnread) {
                 existing.unreadCount++;
+              }
+              
+              // Update name if we have a better one
+              if (otherUserName && otherUserName !== 'Unknown User' && otherUserName !== 'Donor') {
+                existing.otherUserName = otherUserName;
               }
             }
           });
 
-          const conversations = Array.from(conversationMap.values());
-          const itemUnread = conversations.reduce((sum, conv) => sum + conv.unreadCount, 0);
-
-          if (conversations.length > 0) {
-            itemConvs.push({
+          // Add each conversation as a separate entry
+          conversationMap.forEach((conv, otherUserId) => {
+            allConversations.push({
               itemId: item.id,
               itemTitle: item.title,
               itemStatus: item.status,
-              conversations,
+              isMyItem,
+              otherUserId,
+              otherUserName: conv.otherUserName,
+              lastMessage: conv.lastMessage,
+              lastMessageTime: conv.lastMessageTime,
+              unreadCount: conv.unreadCount,
             });
-            unreadTotal += itemUnread;
-          }
+            unreadTotal += conv.unreadCount;
+          });
         } catch (error) {
           console.error(`Error fetching messages for item ${item.id}:`, error);
         }
       }
 
-      setItemConversations(itemConvs);
+      // Sort by most recent message first
+      allConversations.sort((a, b) => 
+        new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
+      );
+
+      console.log(`📊 Total conversations: ${allConversations.length}, Total unread: ${unreadTotal}`);
+
+      setItemConversations(allConversations);
       setTotalUnread(unreadTotal);
     } catch (error) {
-      console.error('Error fetching donor messages:', error);
+      console.error('Error fetching messages:', error);
     }
   };
 
@@ -184,7 +237,7 @@ export function FloatingMessageNotification({ currentUserId }: FloatingMessageNo
           <View style={styles.header}>
             <View style={styles.headerTitle}>
               <Text style={styles.headerIcon}>💬</Text>
-              <Text style={styles.title}>Inquiries on Your Items</Text>
+              <Text style={styles.title}>Messages</Text>
             </View>
             <Pressable onPress={() => setIsOpen(false)}>
               <Text style={styles.closeButton}>✕</Text>
@@ -198,58 +251,51 @@ export function FloatingMessageNotification({ currentUserId }: FloatingMessageNo
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyIcon}>💬</Text>
                   <Text style={styles.emptyText}>
-                    No inquiries yet on your items
+                    No messages yet
                   </Text>
                 </View>
               ) : (
-                itemConversations.map((itemConv) => (
-                  <View key={itemConv.itemId} style={styles.itemSection}>
-                    {/* Item Header */}
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.itemHeaderIcon}>📦</Text>
-                      <View style={styles.itemHeaderContent}>
-                        <Text style={styles.itemTitle} numberOfLines={1}>
-                          {itemConv.itemTitle}
-                        </Text>
-                        <Text style={styles.itemSubtitle}>
-                          {itemConv.itemStatus === 'available' ? 'Available' : 'Reserved'} • {itemConv.conversations.length} inquir{itemConv.conversations.length === 1 ? 'y' : 'ies'}
-                        </Text>
-                      </View>
+                itemConversations.map((conv) => (
+                  <TouchableOpacity
+                    key={`${conv.itemId}-${conv.otherUserId}`}
+                    style={styles.conversationCard}
+                    onPress={() => handleOpenChat(conv.itemId, conv.itemTitle, conv.otherUserId, conv.otherUserName)}
+                  >
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>
+                        {(conv.otherUserName || 'U').charAt(0).toUpperCase()}
+                      </Text>
                     </View>
-
-                    {/* Conversations for this item */}
-                    {itemConv.conversations.filter(conv => conv && conv.userId && conv.userName).map((conv) => (
-                      <TouchableOpacity
-                        key={`${itemConv.itemId}-${conv.userId}`}
-                        style={styles.conversationCard}
-                        onPress={() => handleOpenChat(itemConv.itemId, itemConv.itemTitle, conv.userId, conv.userName)}
-                      >
-                        <View style={styles.avatar}>
-                          <Text style={styles.avatarText}>
-                            {(conv.userName || 'U').charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={styles.conversationContent}>
-                          <View style={styles.conversationHeader}>
-                            <Text style={styles.userName}>{conv.userName || 'Unknown User'}</Text>
-                            {conv.unreadCount > 0 && (
-                              <View style={styles.unreadBadge}>
-                                <Text style={styles.unreadBadgeText}>
-                                  {conv.unreadCount}
-                                </Text>
-                              </View>
-                            )}
+                    <View style={styles.conversationContent}>
+                      <View style={styles.conversationHeader}>
+                        <Text style={styles.userName}>{conv.otherUserName || 'Unknown User'}</Text>
+                        {conv.unreadCount > 0 && (
+                          <View style={styles.unreadBadge}>
+                            <Text style={styles.unreadBadgeText}>
+                              {conv.unreadCount}
+                            </Text>
                           </View>
-                          <Text style={styles.lastMessage} numberOfLines={1}>
-                            {conv.lastMessage || 'No message'}
-                          </Text>
-                          <Text style={styles.timeText}>
-                            {formatTime(conv.lastMessageTime)}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                        )}
+                      </View>
+                      <View style={styles.itemInfo}>
+                        <Text style={styles.itemInfoIcon}>📦</Text>
+                        <Text style={styles.itemInfoText} numberOfLines={1}>
+                          {conv.itemTitle}
+                        </Text>
+                        {!conv.isMyItem && (
+                          <View style={styles.inquiringBadge}>
+                            <Text style={styles.inquiringBadgeText}>Inquiring</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.lastMessage} numberOfLines={1}>
+                        {conv.lastMessage || 'No message'}
+                      </Text>
+                      <Text style={styles.timeText}>
+                        {formatTime(conv.lastMessageTime)}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 ))
               )}
             </View>
@@ -369,34 +415,6 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     textAlign: 'center',
   },
-  itemSection: {
-    marginBottom: spacing.xl,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  itemHeaderIcon: {
-    fontSize: fontSize.lg,
-    marginRight: spacing.sm,
-  },
-  itemHeaderContent: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-    marginBottom: 2,
-  },
-  itemSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.mutedForeground,
-  },
   conversationCard: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
@@ -458,5 +476,37 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: fontSize.xs,
     color: colors.mutedForeground,
+  },
+  itemInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  itemInfoIcon: {
+    fontSize: fontSize.lg,
+    marginRight: spacing.sm,
+  },
+  itemInfoText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.foreground,
+    marginBottom: 2,
+    flex: 1,
+  },
+  inquiringBadge: {
+    backgroundColor: colors.orange,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+  inquiringBadgeText: {
+    color: '#ffffff',
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
   },
 });

@@ -124,6 +124,10 @@ export const itemsAPI = {
       method: "DELETE",
     });
   },
+
+  getClaimed: async (userId: string) => {
+    return makeRequest(`/items/claimed/${userId}`);
+  },
 };
 
 // Profile API
@@ -151,6 +155,32 @@ export const adminAPI = {
       method: "DELETE",
     });
   },
+  
+  getReviewAnalytics: async () => {
+    return makeRequest("/admin/analytics/reviews");
+  },
+  
+  getAppFeedback: async () => {
+    return makeRequest("/admin/app-feedback");
+  },
+  
+  getAllDonorReviews: async () => {
+    return makeRequest("/admin/donor-reviews");
+  },
+};
+
+// App Feedback API
+export const appFeedbackAPI = {
+  create: async (feedback: any) => {
+    return makeRequest("/app-feedback", {
+      method: "POST",
+      body: JSON.stringify(feedback),
+    });
+  },
+
+  getByUser: async (userId: string) => {
+    return makeRequest(`/app-feedback/${userId}`);
+  },
 };
 
 // Reviews API
@@ -164,6 +194,10 @@ export const reviewsAPI = {
       method: "POST",
       body: JSON.stringify(review),
     });
+  },
+
+  getReview: async (itemId: string, userId: string) => {
+    return makeRequest(`/reviews/check/${itemId}/${userId}`);
   },
 };
 

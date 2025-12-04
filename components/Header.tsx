@@ -6,8 +6,8 @@ import {
 } from "react-native";
 import { User as UserType } from "./LoginPage";
 import { useState } from "react";
+import { useTheme } from "../contexts/ThemeContext";
 import {
-  colors,
   spacing,
   borderRadius,
   fontSize,
@@ -21,6 +21,8 @@ interface HeaderProps {
   onViewProfile: () => void;
   onViewAdmin?: () => void;
   onLogout: () => void;
+  currentView?: 'items' | 'profile' | 'admin' | 'messages';
+  onBackToHome?: () => void;
 }
 
 export function Header({
@@ -29,7 +31,10 @@ export function Header({
   onViewProfile,
   onViewAdmin,
   onLogout,
+  currentView,
+  onBackToHome,
 }: HeaderProps) {
+  const { colors, toggleTheme, isDark } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
 
   const getInitials = (name: string) => {
@@ -41,24 +46,42 @@ export function Header({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
       <View style={styles.header}>
-        {/* Logo and Title */}
-        <View style={styles.logo}>
-          <Text style={styles.emoji}>🍽️</Text>
-          <Text style={styles.title}>Fooditude</Text>
-        </View>
+        {/* Logo and Title OR Back Button */}
+        {currentView && currentView !== 'items' && currentView !== 'profile' && onBackToHome ? (
+          <Pressable 
+            style={styles.backButton} 
+            onPress={onBackToHome}
+          >
+            <Text style={[styles.backArrow, { color: colors.foreground }]}>←</Text>
+            <Text style={[styles.backText, { color: colors.foreground }]}>Home</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.logo}>
+            <Text style={styles.emoji}>🍽️</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>Fooditude</Text>
+          </View>
+        )}
 
         {/* Actions */}
         <View style={styles.actions}>
+          {/* Dark Mode Toggle */}
+          <Pressable
+            style={[styles.themeButton, { backgroundColor: colors.secondary }]}
+            onPress={toggleTheme}
+          >
+            <Text style={styles.themeButtonText}>{isDark ? "☀️" : "🌙"}</Text>
+          </Pressable>
+
           {/* Share Food Button */}
           <Pressable
-            style={styles.shareButton}
+            style={[styles.shareButton, { backgroundColor: colors.primary, ...shadows.sm }]}
             onPress={onAddItem}
           >
             <View style={styles.shareButtonContent}>
-              <Text style={styles.shareButtonText}>+</Text>
-              <Text style={styles.shareButtonText}>Share</Text>
+              <Text style={[styles.shareButtonText, { color: colors.primaryForeground }]}>+</Text>
+              <Text style={[styles.shareButtonText, { color: colors.primaryForeground }]}>Share</Text>
             </View>
           </Pressable>
 
@@ -66,23 +89,26 @@ export function Header({
           {user && (
             <View>
               <Pressable
-                style={styles.avatar}
+                style={[styles.avatar, { backgroundColor: colors.primary }]}
                 onPress={() => setShowMenu(!showMenu)}
               >
-                <Text style={styles.avatarText}>
+                <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>
                   {getInitials(user.name)}
                 </Text>
               </Pressable>
 
               {/* Dropdown Menu */}
               {showMenu && (
-                <View style={styles.dropdown}>
+                <View style={[
+                  styles.dropdown, 
+                  { backgroundColor: colors.card, borderColor: colors.border, ...shadows.lg }
+                ]}>
                   {/* User Info */}
-                  <View style={styles.dropdownHeader}>
-                    <Text style={styles.userName}>
+                  <View style={[styles.dropdownHeader, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.userName, { color: colors.cardForeground }]}>
                       {user.name}
                     </Text>
-                    <Text style={styles.userEmail}>
+                    <Text style={[styles.userEmail, { color: colors.mutedForeground }]}>
                       {user.email}
                     </Text>
                   </View>
@@ -96,7 +122,7 @@ export function Header({
                     }}
                   >
                     <Text style={styles.menuEmoji}>👤</Text>
-                    <Text style={styles.menuText}>
+                    <Text style={[styles.menuText, { color: colors.cardForeground }]}>
                       View Profile
                     </Text>
                   </Pressable>
@@ -110,7 +136,7 @@ export function Header({
                       }}
                     >
                       <Text style={styles.menuEmoji}>🛡️</Text>
-                      <Text style={styles.menuText}>Admin Panel</Text>
+                      <Text style={[styles.menuText, { color: colors.cardForeground }]}>Admin Panel</Text>
                     </Pressable>
                   )}
 
@@ -122,7 +148,7 @@ export function Header({
                     }}
                   >
                     <Text style={styles.menuEmoji}>🚪</Text>
-                    <Text style={styles.menuText}>Logout</Text>
+                    <Text style={[styles.menuText, { color: colors.cardForeground }]}>Logout</Text>
                   </Pressable>
                 </View>
               )}
@@ -144,9 +170,7 @@ export function Header({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   header: {
     paddingHorizontal: spacing.lg,
@@ -165,53 +189,55 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: fontSize.xl,
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
+    fontWeight: fontWeight.semibold,
   },
   actions: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  shareButton: {
-    backgroundColor: colors.primary,
+  themeButton: {
+    width: 40,
+    height: 40,
     borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeButtonText: {
+    fontSize: fontSize.lg,
+  },
+  shareButton: {
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   shareButtonContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   shareButtonText: {
-    color: colors.primaryForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.sm,
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
-    color: colors.primaryForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.sm,
   },
   dropdown: {
     position: "absolute",
     top: 48,
     right: 0,
     width: 224,
-    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: borderRadius.lg,
-    ...shadows.lg,
     overflow: "hidden",
     zIndex: 50,
   },
@@ -219,23 +245,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   userName: {
-    fontWeight: fontWeight.medium,
-    color: colors.cardForeground,
-    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    fontSize: fontSize.sm,
+    marginBottom: spacing.xs,
   },
   userEmail: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-    marginTop: 4,
+    fontSize: fontSize.xs,
   },
   menuItem: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
@@ -248,11 +269,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   menuEmoji: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.base,
   },
   menuText: {
-    color: colors.foreground,
-    fontSize: fontSize.base,
+    fontSize: fontSize.sm,
   },
   overlay: {
     position: "absolute",
@@ -260,7 +280,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 1000,
-    marginTop: 56,
+    backgroundColor: "transparent",
+    zIndex: 40,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  backArrow: {
+    fontSize: fontSize.lg,
+  },
+  backText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
 });

@@ -6,8 +6,8 @@ import {
   Pressable,
   StyleSheet,
 } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
 import {
-  colors,
   spacing,
   borderRadius,
   fontSize,
@@ -28,6 +28,7 @@ export interface FoodItem {
   contactEmail: string;
   dietaryTags: string[];
   status: "available" | "reserved";
+  claimedBy?: string;
   pickupInstructions?: string;
 }
 
@@ -59,6 +60,7 @@ function formatExpiryDate(dateString: string): string {
 }
 
 export function ItemCard({ item, onPress }: ItemCardProps) {
+  const { colors } = useTheme();
   const expiryText = useMemo(
     () => formatExpiryDate(item.expiryDate),
     [item.expiryDate],
@@ -70,6 +72,98 @@ export function ItemCard({ item, onPress }: ItemCardProps) {
       expiryText.includes("days left"),
     [expiryText],
   );
+
+  const styles = StyleSheet.create({
+    card: {
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      overflow: "hidden",
+    },
+    imageContainer: {
+      position: "relative",
+      backgroundColor: colors.muted,
+      aspectRatio: 4 / 3,
+    },
+    image: {
+      width: "100%",
+      height: "100%",
+    },
+    urgentBadge: {
+      position: "absolute",
+      top: spacing.sm,
+      left: spacing.sm,
+      backgroundColor: colors.destructive,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 4,
+    },
+    urgentBadgeText: {
+      color: colors.destructiveForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    reservedBadge: {
+      position: "absolute",
+      top: spacing.sm,
+      right: spacing.sm,
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 4,
+    },
+    reservedBadgeText: {
+      color: colors.secondaryForeground,
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    content: {
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+    title: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.medium,
+      color: colors.cardForeground,
+    },
+    description: {
+      fontSize: fontSize.base,
+      color: colors.mutedForeground,
+    },
+    tagsContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 4,
+      marginBottom: 4,
+    },
+    tag: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+    },
+    tagText: {
+      fontSize: fontSize.xs,
+      color: colors.foreground,
+    },
+    details: {
+      gap: 4,
+    },
+    detailRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    detailIcon: {
+      fontSize: fontSize.sm,
+    },
+    detailText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+  });
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -149,95 +243,3 @@ export function ItemCard({ item, onPress }: ItemCardProps) {
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    overflow: "hidden",
-  },
-  imageContainer: {
-    position: "relative",
-    backgroundColor: colors.muted,
-    aspectRatio: 4 / 3,
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-  },
-  urgentBadge: {
-    position: "absolute",
-    top: spacing.sm,
-    left: spacing.sm,
-    backgroundColor: colors.destructive,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-  },
-  urgentBadgeText: {
-    color: colors.destructiveForeground,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-  },
-  reservedBadge: {
-    position: "absolute",
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-  },
-  reservedBadgeText: {
-    color: colors.secondaryForeground,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium,
-    color: colors.cardForeground,
-  },
-  description: {
-    fontSize: fontSize.base,
-    color: colors.mutedForeground,
-  },
-  tagsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    marginBottom: 4,
-  },
-  tag: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  tagText: {
-    fontSize: fontSize.xs,
-    color: colors.foreground,
-  },
-  details: {
-    gap: 4,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  detailIcon: {
-    fontSize: fontSize.sm,
-  },
-  detailText: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-  },
-});

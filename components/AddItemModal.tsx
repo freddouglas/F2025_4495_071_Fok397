@@ -3,14 +3,17 @@ import { Modal, View, Text, TextInput, Pressable, ScrollView, Image, ActivityInd
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import type { FoodItem } from "./ItemCard";
+import type { User } from "./LoginPage";
 import { uploadImageMobile } from "../utils/api";
 import { showToast } from "./Toast";
-import { colors, spacing, borderRadius, fontSize, fontWeight } from "../utils/theme";
+import { useTheme } from "../contexts/ThemeContext";
+import { spacing, borderRadius, fontSize, fontWeight } from "../utils/theme";
 
 interface AddItemModalProps {
   visible: boolean;
   onClose: () => void;
   onAddItem: (item: Omit<FoodItem, "id" | "userId">) => void;
+  user: User;
 }
 
 const CATEGORIES = [
@@ -24,7 +27,8 @@ const CATEGORIES = [
 
 const DIETARY_TAGS = ["Vegetarian", "Vegan", "Gluten Free", "Dairy Free"];
 
-export function AddItemModal({ visible, onClose, onAddItem }: AddItemModalProps) {
+export function AddItemModal({ visible, onClose, onAddItem, user }: AddItemModalProps) {
+  const { colors } = useTheme();
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -33,8 +37,8 @@ export function AddItemModal({ visible, onClose, onAddItem }: AddItemModalProps)
     expiryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     quantity: "",
     imageUrl: "",
-    contactName: "",
-    contactEmail: "",
+    contactName: user.name,
+    contactEmail: user.email,
     dietaryTags: [] as string[],
     pickupInstructions: "",
   });
@@ -63,8 +67,8 @@ export function AddItemModal({ visible, onClose, onAddItem }: AddItemModalProps)
       expiryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       quantity: "",
       imageUrl: "",
-      contactName: "",
-      contactEmail: "",
+      contactName: user.name,
+      contactEmail: user.email,
       dietaryTags: [],
       pickupInstructions: "",
     });
@@ -143,6 +147,252 @@ export function AddItemModal({ visible, onClose, onAddItem }: AddItemModalProps)
   };
 
   const selectedCategory = CATEGORIES.find(c => c.value === formData.category);
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    content: {
+      padding: spacing.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.lg,
+    },
+    headerTitle: {
+      fontSize: fontSize['2xl'],
+      fontWeight: fontWeight.medium as any,
+      color: colors.foreground,
+    },
+    closeButton: {
+      fontSize: fontSize['2xl'],
+      color: colors.textSecondary,
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      marginBottom: spacing['2xl'],
+      fontSize: fontSize.base,
+    },
+    form: {
+      gap: spacing.lg,
+    },
+    field: {
+      gap: spacing.sm,
+    },
+    flex: {
+      flex: 1,
+    },
+    label: {
+      fontWeight: fontWeight.medium as any,
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+    input: {
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+    textArea: {
+      minHeight: 96,
+      paddingTop: spacing.md,
+    },
+    textAreaSmall: {
+      minHeight: 72,
+      paddingTop: spacing.md,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: spacing.lg,
+    },
+    picker: {
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    pickerText: {
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+    pickerArrow: {
+      color: colors.textSecondary,
+      fontSize: fontSize.sm,
+    },
+    dropdown: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      marginTop: 4,
+      overflow: 'hidden',
+    },
+    dropdownItem: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    dropdownItemText: {
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+    dropdownItemTextActive: {
+      color: colors.primary,
+      fontWeight: fontWeight.medium as any,
+    },
+    tagsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    tagButton: {
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderWidth: 1,
+      backgroundColor: colors.inputBackground,
+      borderColor: colors.border,
+    },
+    tagButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    tagButtonText: {
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+    tagButtonTextActive: {
+      color: colors.primaryForeground,
+      fontWeight: fontWeight.medium as any,
+    },
+    imagePreviewContainer: {
+      position: 'relative',
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+      height: 192,
+    },
+    imagePreview: {
+      width: '100%',
+      height: '100%',
+    },
+    removeImageButton: {
+      position: 'absolute',
+      top: spacing.sm,
+      right: spacing.sm,
+      backgroundColor: colors.destructive,
+      borderRadius: borderRadius.full,
+      padding: spacing.sm,
+    },
+    removeImageText: {
+      color: colors.destructiveForeground,
+      fontWeight: fontWeight.medium as any,
+      fontSize: fontSize.base,
+    },
+    imagePlaceholder: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: 192,
+    },
+    imagePlaceholderEmoji: {
+      fontSize: fontSize['4xl'],
+      marginBottom: spacing.sm,
+    },
+    imagePlaceholderText: {
+      color: colors.textSecondary,
+      fontSize: fontSize.base,
+    },
+    imageButtonsRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    imageButton: {
+      flex: 1,
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    imageButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    imageButtonEmoji: {
+      fontSize: fontSize.lg,
+    },
+    imageButtonText: {
+      color: colors.foreground,
+      fontWeight: fontWeight.medium as any,
+      fontSize: fontSize.base,
+    },
+    helperText: {
+      fontSize: fontSize.sm,
+      color: colors.textSecondary,
+    },
+    submitRow: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingTop: spacing.lg,
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    cancelButtonText: {
+      color: colors.secondaryForeground,
+      textAlign: 'center',
+      fontWeight: fontWeight.medium as any,
+      fontSize: fontSize.base,
+    },
+    submitButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    submitButtonText: {
+      color: colors.primaryForeground,
+      textAlign: 'center',
+      fontWeight: fontWeight.medium as any,
+      fontSize: fontSize.base,
+    },
+    displayText: {
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+  });
 
   return (
     <Modal
@@ -373,27 +623,13 @@ export function AddItemModal({ visible, onClose, onAddItem }: AddItemModalProps)
                 {/* Contact Info */}
                 <View style={styles.row}>
                   <View style={[styles.field, styles.flex]}>
-                    <Text style={styles.label}>Your Name *</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="John Doe"
-                      placeholderTextColor={colors.mutedForeground}
-                      value={formData.contactName}
-                      onChangeText={(text) => setFormData({ ...formData, contactName: text })}
-                    />
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Your Name</Text>
+                    <Text style={styles.displayText}>{user.name}</Text>
                   </View>
 
                   <View style={[styles.field, styles.flex]}>
-                    <Text style={styles.label}>Your Email *</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="john@example.com"
-                      placeholderTextColor={colors.mutedForeground}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      value={formData.contactEmail}
-                      onChangeText={(text) => setFormData({ ...formData, contactEmail: text })}
-                    />
+                    <Text style={[styles.label, { color: colors.mutedForeground }]}>Your Email</Text>
+                    <Text style={styles.displayText}>{user.email}</Text>
                   </View>
                 </View>
 
@@ -421,245 +657,3 @@ export function AddItemModal({ visible, onClose, onAddItem }: AddItemModalProps)
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  headerTitle: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-  },
-  closeButton: {
-    fontSize: fontSize['2xl'],
-    color: colors.mutedForeground,
-  },
-  subtitle: {
-    color: colors.mutedForeground,
-    marginBottom: spacing['2xl'],
-    fontSize: fontSize.base,
-  },
-  form: {
-    gap: spacing.lg,
-  },
-  field: {
-    gap: spacing.sm,
-  },
-  flex: {
-    flex: 1,
-  },
-  label: {
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-    fontSize: fontSize.base,
-  },
-  input: {
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.foreground,
-    fontSize: fontSize.base,
-  },
-  textArea: {
-    minHeight: 96,
-    paddingTop: spacing.md,
-  },
-  textAreaSmall: {
-    minHeight: 72,
-    paddingTop: spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-  },
-  picker: {
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  pickerText: {
-    color: colors.foreground,
-    fontSize: fontSize.base,
-  },
-  pickerArrow: {
-    color: colors.mutedForeground,
-    fontSize: fontSize.sm,
-  },
-  dropdown: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    marginTop: 4,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  dropdownItemText: {
-    color: colors.foreground,
-    fontSize: fontSize.base,
-  },
-  dropdownItemTextActive: {
-    color: colors.primary,
-    fontWeight: fontWeight.medium,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  tagButton: {
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    backgroundColor: colors.inputBackground,
-    borderColor: colors.border,
-  },
-  tagButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  tagButtonText: {
-    color: colors.foreground,
-    fontSize: fontSize.base,
-  },
-  tagButtonTextActive: {
-    color: colors.primaryForeground,
-    fontWeight: fontWeight.medium,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    height: 192,
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.destructive,
-    borderRadius: borderRadius.full,
-    padding: spacing.sm,
-  },
-  removeImageText: {
-    color: colors.destructiveForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  imagePlaceholder: {
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.lg,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 192,
-  },
-  imagePlaceholderEmoji: {
-    fontSize: fontSize['4xl'],
-    marginBottom: spacing.sm,
-  },
-  imagePlaceholderText: {
-    color: colors.mutedForeground,
-    fontSize: fontSize.base,
-  },
-  imageButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  imageButton: {
-    flex: 1,
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  imageButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  imageButtonEmoji: {
-    fontSize: fontSize.lg,
-  },
-  imageButtonText: {
-    color: colors.foreground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  helperText: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-  },
-  submitRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingTop: spacing.lg,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  cancelButtonText: {
-    color: colors.secondaryForeground,
-    textAlign: 'center',
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  submitButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  submitButtonText: {
-    color: colors.primaryForeground,
-    textAlign: 'center',
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-});

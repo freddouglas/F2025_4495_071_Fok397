@@ -1,7 +1,11 @@
 import { Modal, View, Text, Image, Pressable, ScrollView, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useState, useEffect } from "react";
 import type { FoodItem } from "./ItemCard";
-import { colors, spacing, borderRadius, fontSize, fontWeight } from "../utils/theme";
+import { useTheme } from "../contexts/ThemeContext";
+import { spacing, borderRadius, fontSize, fontWeight } from "../utils/theme";
+import { ReviewModal } from "./ReviewModal";
+import { reviewsAPI } from "../utils/api";
 
 interface ItemDetailModalProps {
   item: FoodItem | null;
@@ -13,6 +17,7 @@ interface ItemDetailModalProps {
   onDelete?: (itemId: string) => void;
   currentUserId?: string;
   isAdmin?: boolean;
+  onReviewSubmitted?: () => void;
 }
 
 export function ItemDetailModal({
@@ -25,7 +30,35 @@ export function ItemDetailModal({
   onDelete,
   currentUserId,
   isAdmin = false,
+  onReviewSubmitted,
 }: ItemDetailModalProps) {
+  const { colors } = useTheme();
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
+  const [isCheckingReview, setIsCheckingReview] = useState(false);
+
+  useEffect(() => {
+    const checkReview = async () => {
+      if (!currentUserId || !item || !visible) return;
+      
+      // Only check if this is a reserved item and current user is not the owner
+      if (item.status === "reserved" && item.claimedBy === currentUserId && item.userId !== currentUserId) {
+        setIsCheckingReview(true);
+        try {
+          const response = await reviewsAPI.getReview(item.id, currentUserId);
+          setHasReviewed(response.hasReviewed);
+        } catch (error) {
+          console.error("Error checking review:", error);
+          setHasReviewed(false);
+        } finally {
+          setIsCheckingReview(false);
+        }
+      }
+    };
+
+    checkReview();
+  }, [item, currentUserId, visible]);
+
   if (!item) return null;
   
   // Debug log when modal opens
@@ -61,6 +94,208 @@ export function ItemDetailModal({
       ]
     );
   };
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    content: {
+      padding: spacing.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      marginBottom: spacing.lg,
+    },
+    headerContent: {
+      flex: 1,
+      paddingRight: spacing.lg,
+    },
+    headerTitle: {
+      fontSize: fontSize['2xl'],
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    reservedBadge: {
+      backgroundColor: colors.secondary,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 4,
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    reservedEmoji: {
+      fontSize: fontSize.lg,
+    },
+    reservedText: {
+      color: colors.secondaryForeground,
+      fontWeight: fontWeight.medium,
+      fontSize: fontSize.base,
+    },
+    closeButton: {
+      fontSize: fontSize['2xl'],
+      color: colors.mutedForeground,
+    },
+    imageContainer: {
+      position: 'relative',
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      overflow: 'hidden',
+      marginBottom: spacing['2xl'],
+      aspectRatio: 16/9,
+    },
+    image: {
+      width: '100%',
+      height: '100%',
+    },
+    sections: {
+      gap: spacing['2xl'],
+    },
+    sectionTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    sectionText: {
+      fontSize: fontSize.base,
+      color: colors.mutedForeground,
+    },
+    tagsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    tag: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.full,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 4,
+    },
+    tagText: {
+      color: colors.foreground,
+      fontSize: fontSize.base,
+    },
+    separator: {
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    details: {
+      gap: spacing.lg,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    detailIcon: {
+      fontSize: fontSize.xl,
+    },
+    detailContent: {
+      flex: 1,
+    },
+    detailLabel: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    detailValue: {
+      fontSize: fontSize.base,
+      color: colors.foreground,
+      marginTop: 4,
+    },
+    actions: {
+      gap: spacing.md,
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    secondaryButton: {
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    buttonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    buttonEmoji: {
+      fontSize: fontSize.lg,
+    },
+    primaryButtonText: {
+      color: colors.primaryForeground,
+      fontWeight: fontWeight.medium,
+      fontSize: fontSize.base,
+    },
+    secondaryButtonText: {
+      color: colors.secondaryForeground,
+      fontWeight: fontWeight.medium,
+      fontSize: fontSize.base,
+    },
+    reservedNotice: {
+      backgroundColor: colors.muted,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+    },
+    reservedNoticeText: {
+      textAlign: 'center',
+      color: colors.mutedForeground,
+      fontSize: fontSize.base,
+    },
+    destructiveButton: {
+      backgroundColor: colors.destructive,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    destructiveButtonText: {
+      color: colors.destructiveForeground,
+      fontWeight: fontWeight.medium,
+      fontSize: fontSize.base,
+    },
+    adminNotice: {
+      backgroundColor: colors.muted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      marginTop: spacing.md,
+    },
+    adminNoticeText: {
+      textAlign: 'center',
+      color: colors.mutedForeground,
+      fontSize: fontSize.base,
+    },
+    reviewedButton: {
+      backgroundColor: colors.muted,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: borderRadius.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    reviewedButtonText: {
+      color: colors.mutedForeground,
+      fontWeight: fontWeight.medium,
+      fontSize: fontSize.base,
+    },
+  });
 
   return (
     <Modal
@@ -258,207 +493,68 @@ export function ItemDetailModal({
                   )}
 
                   {item.status === "reserved" && (
-                    <View style={styles.reservedNotice}>
-                      <Text style={styles.reservedNoticeText}>
-                        This food has been reserved and is no longer available.
-                      </Text>
-                    </View>
+                    <>
+                      {/* If user claimed this item, show review button */}
+                      {item.claimedBy === currentUserId && (
+                        <View style={styles.actions}>
+                          <Pressable
+                            style={hasReviewed ? styles.reviewedButton : styles.primaryButton}
+                            onPress={() => !hasReviewed && setShowReviewModal(true)}
+                            disabled={hasReviewed || isCheckingReview}
+                          >
+                            <View style={styles.buttonContent}>
+                              <Text style={styles.buttonEmoji}>{hasReviewed ? "✓" : "⭐"}</Text>
+                              <Text style={hasReviewed ? styles.reviewedButtonText : styles.primaryButtonText}>
+                                {isCheckingReview ? "Checking..." : hasReviewed ? "Already Reviewed" : "Review Donor"}
+                              </Text>
+                            </View>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.secondaryButton}
+                            onPress={() => onMessage(item.id)}
+                          >
+                            <View style={styles.buttonContent}>
+                              <Text style={styles.buttonEmoji}>💬</Text>
+                              <Text style={styles.secondaryButtonText}>Contact Donor</Text>
+                            </View>
+                          </Pressable>
+                        </View>
+                      )}
+
+                      {/* If someone else claimed it */}
+                      {item.claimedBy !== currentUserId && (
+                        <View style={styles.reservedNotice}>
+                          <Text style={styles.reservedNoticeText}>
+                            This food has been reserved and is no longer available.
+                          </Text>
+                        </View>
+                      )}
+                    </>
                   )}
                 </>
               )}
             </View>
           </View>
         </ScrollView>
+        
+        {/* Review Modal */}
+        {showReviewModal && item && currentUserId && (
+          <ReviewModal
+            isOpen={showReviewModal}
+            onClose={() => setShowReviewModal(false)}
+            itemId={item.id}
+            donorId={item.userId}
+            donorName={item.contactName}
+            itemTitle={item.title}
+            onReviewSubmitted={() => {
+              setHasReviewed(true);
+              setShowReviewModal(false);
+              onReviewSubmitted?.();
+            }}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.lg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-  },
-  headerContent: {
-    flex: 1,
-    paddingRight: spacing.lg,
-  },
-  headerTitle: {
-    fontSize: fontSize['2xl'],
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-    marginBottom: spacing.sm,
-  },
-  reservedBadge: {
-    backgroundColor: colors.secondary,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  reservedEmoji: {
-    fontSize: fontSize.lg,
-  },
-  reservedText: {
-    color: colors.secondaryForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  closeButton: {
-    fontSize: fontSize['2xl'],
-    color: colors.mutedForeground,
-  },
-  imageContainer: {
-    position: 'relative',
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    marginBottom: spacing['2xl'],
-    aspectRatio: 16/9,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  sections: {
-    gap: spacing['2xl'],
-  },
-  sectionTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-    marginBottom: spacing.sm,
-  },
-  sectionText: {
-    fontSize: fontSize.base,
-    color: colors.mutedForeground,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  tag: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-  },
-  tagText: {
-    color: colors.foreground,
-    fontSize: fontSize.base,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  details: {
-    gap: spacing.lg,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  detailIcon: {
-    fontSize: fontSize.xl,
-  },
-  detailContent: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-  },
-  detailValue: {
-    fontSize: fontSize.base,
-    color: colors.foreground,
-    marginTop: 4,
-  },
-  actions: {
-    gap: spacing.md,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  secondaryButton: {
-    backgroundColor: colors.secondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  buttonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  buttonEmoji: {
-    fontSize: fontSize.lg,
-  },
-  primaryButtonText: {
-    color: colors.primaryForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  secondaryButtonText: {
-    color: colors.secondaryForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  reservedNotice: {
-    backgroundColor: colors.muted,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-  },
-  reservedNoticeText: {
-    textAlign: 'center',
-    color: colors.mutedForeground,
-    fontSize: fontSize.base,
-  },
-  destructiveButton: {
-    backgroundColor: colors.destructive,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  destructiveButtonText: {
-    color: colors.destructiveForeground,
-    fontWeight: fontWeight.medium,
-    fontSize: fontSize.base,
-  },
-  adminNotice: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginTop: spacing.md,
-  },
-  adminNoticeText: {
-    textAlign: 'center',
-    color: '#1E40AF',
-    fontSize: fontSize.base,
-  },
-});
